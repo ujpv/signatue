@@ -5,9 +5,9 @@
 #include <exception>
 #include <functional>
 
-std::string signatue(
+std::string signature(
     std::istream& input,
     size_t block_size,
     size_t thread_count,
-    std::function<void(size_t, size_t)> progress_callback = {}
+    const std::function<void(size_t, size_t)>& progress_callback = {}
     );

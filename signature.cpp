@@ -5,7 +5,6 @@
 #include <boost/optional.hpp>
 
 #include <atomic>
-#include <numeric>
 #include <string>
 #include <thread>
 #include <vector>
@@ -14,20 +13,20 @@ namespace {
 
 class jobs_pool {
 private:
-    struct block {
+    struct file_chunk {
         std::string buffer;
         size_t number;
     };
 
 public:
-    struct block_handler {
+    struct job_handler {
         std::string &buffer;
         size_t &number;
         const size_t index;
     };
 
     explicit jobs_pool(size_t size, size_t buffer_size)
-        : blocks_(size, {std::string(buffer_size, '\0'), 0})
+        : chunks_(size, {std::string(buffer_size, '\0'), 0})
         , jobs_(size)
         , ready_(size)
         , active_(true)
@@ -36,34 +35,34 @@ public:
             ready_.push(i);
     }
 
-    block_handler allocate()
+    job_handler allocate()
     {
         size_t index{};
         while (!ready_.pop(index));
-        auto& block = blocks_[index];
+        auto& block = chunks_[index];
         return {block.buffer, block.number, index};
     }
 
-    void free(const block_handler& block)
+    void free(const job_handler& block)
     {
         while (!ready_.push(block.index));
     }
 
-    boost::optional<block_handler> get()
+    boost::optional<job_handler> get()
     {
         size_t index{};
         while (active_ || !jobs_.empty()) {
             if (jobs_.pop(index)) {
-                auto& block = blocks_[index];
+                auto& block = chunks_[index];
                 return boost::make_optional(
-                    block_handler{block.buffer, block.number, index});
+                    job_handler{block.buffer, block.number, index});
             }
         }
 
         return boost::none;
     }
 
-    void enqueue(const block_handler& block)
+    void enqueue(const job_handler& block)
     {
         while (!jobs_.push(block.index));
     }
@@ -71,9 +70,9 @@ public:
     void terminate() { active_ = false; }
 
 private:
-    // keep block memory
-    std::vector<block> blocks_;
-    // contains data to process
+    // keep memory for file chunks
+    std::vector<file_chunk> chunks_;
+    // prepared jobs to process
     boost::lockfree::queue<size_t, boost::lockfree::fixed_sized<true>> jobs_;
     // ready to use
     boost::lockfree::queue<size_t, boost::lockfree::fixed_sized<true>> ready_;
@@ -82,7 +81,7 @@ private:
 
 class thread_pool {
 public:
-    explicit thread_pool(size_t size, std::function<void(void)> func)
+    thread_pool(size_t size, const std::function<void(void)>& func)
     {
         for (size_t i = 0; i < size; ++i)
             threads_.emplace_back(func);
@@ -109,20 +108,20 @@ private:
 
 }
 
-std::string signatue(
+std::string signature(
     std::istream &input,
     size_t block_size,
     size_t thread_count,
-    std::function<void(size_t, size_t)> progress_callback)
+    const std::function<void(size_t, size_t)>& progress_callback)
 {
     jobs_pool jobs(thread_count * 2, block_size);
 
     // state
     std::atomic_bool reading(true);
     std::atomic_bool aborted(false);
-    input.seekg(0, input.end);
+    input.seekg(0, std::istream::end);
     const size_t file_size = static_cast<size_t>(input.tellg());
-    input.seekg(0, input.beg);
+    input.seekg(0, std::istream::beg);
     const size_t blocks_count = (file_size + block_size - 1) / block_size;
 
     // result
@@ -143,15 +142,20 @@ std::string signatue(
                 throw std::runtime_error("Wrong size. File has been chaned during reading");
             }
         }
-        return;
     });
 
-    // read file - procucer
+    // read file - producer
     std::string buffer(block_size, '\0');
     size_t blocks_read = 0;
-    while (!input.eof()) {
+    while (blocks_count != blocks_read && !aborted) {
+        if (blocks_read + 1 == blocks_count)
+            buffer.resize(file_size % block_size);
+
         input.read(&buffer[0], std::streamsize(buffer.size()));
-        buffer.resize(size_t(input.gcount()));
+        if (input.fail()) {
+            aborted = true;
+        }
+
         auto block = jobs.allocate();
         std::swap(block.buffer, buffer);
         block.number = blocks_read++;

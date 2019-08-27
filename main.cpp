@@ -1,5 +1,5 @@
-#include "utils.h"
 #include "signature.h"
+#include "utils.h"
 
 #include <fstream>
 #include <iostream>
@@ -11,9 +11,9 @@ int main(int argc, const char *argv[])
         if (auto file = std::ifstream(args->input, std::ios::binary)) {
             std::string sign;
             try {
-                sign = signatue(file,
-                                args->block_size,
-                                std::thread::hardware_concurrency());
+                sign = signature(file,
+                                 args->block_size,
+                                 std::thread::hardware_concurrency());
             } catch (std::exception& e) {
                 std::cerr << "Failed. Reason: " << e.what() << '\n';
             }
