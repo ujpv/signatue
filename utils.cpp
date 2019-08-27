@@ -6,7 +6,7 @@
 
 namespace utils {
 
-boost::optional<arguments> parse_args(int argc, const char *argv[])
+boost::optional<arguments> parse_args(int argc, const char* argv[])
 {
     namespace opts = boost::program_options;
     opts::options_description descr{"Options"};

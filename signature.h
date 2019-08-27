@@ -10,4 +10,4 @@ std::string signature(
     size_t block_size,
     size_t thread_count,
     const std::function<void(size_t, size_t)>& progress_callback = {}
-    );
+);

@@ -1,9 +1,10 @@
-cmake_minimum_required(VERSION 3.1)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
-project(signatue)
-set(CMAKE_CXX_STANDARD 14)
+PROJECT(signatue)
+SET(CMAKE_CXX_STANDARD 14)
+#SET(Boost_USE_STATIC_LIBS ON)
 
-FIND_PACKAGE(Boost COMPONENTS
+FIND_PACKAGE(Boost 1.40 COMPONENTS
     program_options
     thread
     REQUIRED
@@ -11,7 +12,7 @@ FIND_PACKAGE(Boost COMPONENTS
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 
-add_executable(${PROJECT_NAME}
+ADD_EXECUTABLE(${PROJECT_NAME}
     main.cpp
     utils.cpp
     signature.cpp

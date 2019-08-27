@@ -5,6 +5,7 @@
 #include <boost/optional.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <string>
 #include <thread>
 #include <vector>
@@ -20,8 +21,8 @@ private:
 
 public:
     struct job_handler {
-        std::vector<char> &buffer;
-        size_t &number;
+        std::vector<char>& buffer;
+        size_t& number;
         const size_t index;
     };
 
@@ -56,6 +57,8 @@ public:
                 auto& block = chunks_[index];
                 return boost::make_optional(
                     job_handler{block.buffer, block.number, index});
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
             }
         }
 
@@ -70,7 +73,7 @@ public:
     void terminate() { active_ = false; }
 
 private:
-    // keep memory for file chunks
+    // keeps memory for file chunks
     std::vector<file_chunk> chunks_;
     // prepared jobs to process
     boost::lockfree::queue<size_t, boost::lockfree::fixed_sized<true>> jobs_;
@@ -104,6 +107,7 @@ public:
             // suppress
         }
     }
+
 private:
     std::vector<std::thread> threads_;
 };
@@ -111,7 +115,7 @@ private:
 }
 
 std::string signature(
-    std::istream &input,
+    std::istream& input,
     size_t block_size,
     size_t thread_count,
     const std::function<void(size_t, size_t)>& progress_callback)
@@ -139,16 +143,11 @@ std::string signature(
             if (!block)
                 return;
 
-            if (block->number < blocks_count) {
-                MD5 md5;
-                md5.update(block->buffer.data(), block->buffer.size());
-                md5.finalize();
-                md5.hexdigest(sign, block->number * MD5::HASH_LEN);
-                jobs.free(*block);
-            } else {
-                jobs.free(*block);
-                abort("Wrong size. File has been changed during reading");
-            }
+            MD5 md5;
+            md5.update(block->buffer.data(), block->buffer.size());
+            md5.finalize();
+            md5.hexdigest(sign, block->number * MD5::HASH_LEN);
+            jobs.free(*block);
         }
     });
 

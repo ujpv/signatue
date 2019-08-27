@@ -5,7 +5,7 @@
 #include <iostream>
 #include <thread>
 
-int main(int argc, const char *argv[])
+int main(int argc, const char* argv[])
 {
     if (auto args = utils::parse_args(argc, argv)) {
         if (auto file = std::ifstream(args->input, std::ios::binary)) {

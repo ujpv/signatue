@@ -1,7 +1,8 @@
 #pragma once
 
-#include <string>
 #include <boost/optional.hpp>
+
+#include <string>
 
 namespace utils {
 
@@ -11,6 +12,6 @@ struct arguments {
     size_t block_size;
 };
 
-boost::optional<arguments> parse_args(int argc, const char *argv[]);
+boost::optional<arguments> parse_args(int argc, const char* argv[]);
 
 } // namespace utils
