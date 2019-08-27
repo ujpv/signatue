@@ -14,19 +14,19 @@ namespace {
 class jobs_pool {
 private:
     struct file_chunk {
-        std::string buffer;
+        std::vector<char> buffer;
         size_t number;
     };
 
 public:
     struct job_handler {
-        std::string &buffer;
+        std::vector<char> &buffer;
         size_t &number;
         const size_t index;
     };
 
     explicit jobs_pool(size_t size, size_t buffer_size)
-        : chunks_(size, {std::string(buffer_size, '\0'), 0})
+        : chunks_(size, {std::vector<char>(buffer_size, '\0'), 0})
         , jobs_(size)
         , ready_(size)
         , active_(true)
@@ -87,21 +87,23 @@ public:
             threads_.emplace_back(func);
     }
 
-    // wait for the threads termination and rethrow the first exception
     void join()
-    try {
+    {
         for (auto& thread: threads_)
             thread.join();
-    } catch (...) {
-        for (auto& thread: threads_) {
-            if (thread.joinable())
-                try { thread.join(); } catch(...) {}
-        }
-
-        throw;
     }
 
-
+    ~thread_pool()
+    {
+        try {
+            for (auto& thread: threads_) {
+                if (thread.joinable())
+                    thread.join();
+            }
+        } catch (...) {
+            // suppress
+        }
+    }
 private:
     std::vector<std::thread> threads_;
 };
@@ -117,12 +119,15 @@ std::string signature(
     jobs_pool jobs(thread_count * 2, block_size);
 
     // state
-    std::atomic_bool reading(true);
     std::atomic_bool aborted(false);
     input.seekg(0, std::istream::end);
     const size_t file_size = static_cast<size_t>(input.tellg());
     input.seekg(0, std::istream::beg);
     const size_t blocks_count = (file_size + block_size - 1) / block_size;
+    auto abort = [&aborted](const std::string& msg) {
+        aborted = true;
+        throw std::runtime_error(msg);
+    };
 
     // result
     std::string sign(blocks_count * MD5::HASH_LEN, '\0');
@@ -135,26 +140,28 @@ std::string signature(
                 return;
 
             if (block->number < blocks_count) {
-                MD5(block->buffer).hexdigest(&sign[0] + block->number * MD5::HASH_LEN);
+                MD5 md5;
+                md5.update(block->buffer.data(), block->buffer.size());
+                md5.finalize();
+                md5.hexdigest(sign, block->number * MD5::HASH_LEN);
                 jobs.free(*block);
             } else {
-                aborted = true;
-                throw std::runtime_error("Wrong size. File has been chaned during reading");
+                jobs.free(*block);
+                abort("Wrong size. File has been changed during reading");
             }
         }
     });
 
-    // read file - producer
-    std::string buffer(block_size, '\0');
+    // read file
+    std::vector<char> buffer(block_size, '\0');
     size_t blocks_read = 0;
     while (blocks_count != blocks_read && !aborted) {
         if (blocks_read + 1 == blocks_count)
             buffer.resize(file_size % block_size);
 
-        input.read(&buffer[0], std::streamsize(buffer.size()));
-        if (input.fail()) {
-            aborted = true;
-        }
+        input.read(buffer.data(), std::streamsize(buffer.size()));
+        if (input.fail())
+            abort("Read error");
 
         auto block = jobs.allocate();
         std::swap(block.buffer, buffer);
@@ -165,7 +172,6 @@ std::string signature(
     }
 
     jobs.terminate();
-    reading = false;
     // throw exception
     workers.join();
 

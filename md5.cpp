@@ -297,7 +297,7 @@ void MD5::update(const char input[], size_type length)
 // the message digest and zeroizing the context.
 MD5& MD5::finalize()
 {
-    static unsigned char padding[64] = {
+    static const unsigned char padding[64] = {
         0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -345,11 +345,16 @@ std::string MD5::hexdigest() const
     return std::string(buf);
 }
 
-void MD5::hexdigest(char *buf) const
+void MD5::hexdigest(std::string& s, size_t pos) const
 {
     assert(finalized);
-    for (int i=0; i<16; i++)
-        sprintf(buf+i*2, "%02x", digest[i]);
+    char buf[2];
+    for (size_t i=0; i<16; i++) {
+        sprintf(buf, "%02x", digest[i]);
+        size_t out_i = pos + (i << 1);
+        s[out_i] = buf[0];
+        s[out_i + 1] = buf[1];
+    }
 }
 
 //////////////////////////////
