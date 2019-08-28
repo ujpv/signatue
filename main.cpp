@@ -5,6 +5,13 @@
 #include <iostream>
 #include <thread>
 
+void print_progress(size_t total, size_t read)
+{
+    std::cout << "\rRead " << read << " blocks of " << total <<"...";
+    if (total == read)
+        std::cout << "Done";
+}
+
 int main(int argc, const char* argv[])
 {
     if (auto args = utils::parse_args(argc, argv)) {
@@ -13,7 +20,8 @@ int main(int argc, const char* argv[])
             try {
                 sign = signature(file,
                                  args->block_size,
-                                 std::thread::hardware_concurrency());
+                                 std::thread::hardware_concurrency(),
+                                 print_progress);
             } catch (std::exception& e) {
                 std::cerr << "Failed. Reason: " << e.what() << '\n';
                 return 1;
