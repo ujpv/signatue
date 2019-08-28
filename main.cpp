@@ -9,7 +9,7 @@ void print_progress(size_t total, size_t read)
 {
     std::cout << "\rRead " << read << " blocks of " << total <<"...";
     if (total == read)
-        std::cout << "Done";
+        std::cout << "Done\n";
 }
 
 int main(int argc, const char* argv[])
