@@ -20,7 +20,7 @@ private:
     };
 
 public:
-    struct job_handler {
+    struct job_handle {
         std::vector<char>& buffer;
         size_t& number;
         const size_t index;
@@ -36,7 +36,7 @@ public:
             ready_.push(i);
     }
 
-    job_handler allocate()
+    job_handle allocate()
     {
         size_t index{};
         while (!ready_.pop(index));
@@ -44,19 +44,21 @@ public:
         return {block.buffer, block.number, index};
     }
 
-    void free(const job_handler& block)
+    void free(const job_handle& block)
     {
         while (!ready_.push(block.index));
     }
 
-    boost::optional<job_handler> get()
+    // returns boost::none if queue is terminated
+    boost::optional<job_handle> get()
     {
         size_t index{};
         while (active_ || !jobs_.empty()) {
             if (jobs_.pop(index)) {
                 auto& block = chunks_[index];
-                return boost::make_optional(
-                    job_handler{block.buffer, block.number, index});
+                return boost::make_optional(job_handle{block.buffer,
+                                                       block.number,
+                                                       index});
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
             }
@@ -65,7 +67,7 @@ public:
         return boost::none;
     }
 
-    void enqueue(const job_handler& block)
+    void enqueue(const job_handle& block)
     {
         while (!jobs_.push(block.index));
     }
@@ -139,15 +141,16 @@ std::string signature(
     // consumers pool
     thread_pool workers(thread_count, [&]() {
         while (!aborted) {
-            auto block = jobs.get();
-            if (!block)
-                return;
+            if (auto block = jobs.get()) {
+                MD5 md5;
+                md5.update(block->buffer.data(), block->buffer.size());
+                md5.finalize();
+                md5.hexdigest(sign, block->number * MD5::HASH_LEN);
 
-            MD5 md5;
-            md5.update(block->buffer.data(), block->buffer.size());
-            md5.finalize();
-            md5.hexdigest(sign, block->number * MD5::HASH_LEN);
-            jobs.free(*block);
+                jobs.free(*block);
+            } else {
+                return;
+            }
         }
     });
 

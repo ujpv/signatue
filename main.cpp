@@ -16,7 +16,12 @@ int main(int argc, const char* argv[])
                                  std::thread::hardware_concurrency());
             } catch (std::exception& e) {
                 std::cerr << "Failed. Reason: " << e.what() << '\n';
+                return 1;
+            } catch (...) {
+                std::cerr << "Unknown error\n";
+                return -1;
             }
+
             std::ofstream sign_file(args->output);
             sign_file << sign;
             if (!sign_file)
